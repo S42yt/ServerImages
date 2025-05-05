@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strconv"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -15,23 +14,16 @@ import (
 )
 
 func main() {
-
-	cfg := config.LoadFromEnv()
-
-	if port := os.Getenv("PORT"); port != "" {
-		portNum, err := strconv.Atoi(port)
-		if err == nil {
-			cfg.Port = portNum
-			cfg.ServerURL = fmt.Sprintf("http://localhost:%d", portNum)
-		}
+	if err := config.LoadConfig(); err != nil {
+		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	if err := os.MkdirAll(cfg.UploadDir, 0755); err != nil {
+	if err := os.MkdirAll(config.UploadDir, 0755); err != nil {
 		log.Fatalf("Failed to create upload directory: %v", err)
 	}
 
 	app := fiber.New(fiber.Config{
-		BodyLimit: int(cfg.MaxUploadSize),
+		BodyLimit: int(config.MaxUploadSize),
 	})
 
 	app.Use(logger.New())
@@ -41,19 +33,19 @@ func main() {
 		AllowMethods: "GET, POST, DELETE",
 	}))
 
-	app.Post("/upload", handlers.Upload(cfg))
-	app.Get("/cdn/:filename", handlers.ServeImage(cfg))
-	app.Get("/images", handlers.ListImages(cfg))
-	app.Delete("/cdn/:filename", handlers.DeleteImage(cfg))
+	app.Post("/upload", handlers.Upload())
+	app.Get("/cdn/:filename", handlers.ServeImage())
+	app.Get("/images", handlers.ListImages())
+	//app.Delete("/cdn/:filename", handlers.DeleteImage()) // not implemented?
 
-	app.Static("/uploads", "./"+cfg.UploadDir)
+	app.Static("/uploads", "./"+config.UploadDir)
 
-	log.Printf("ServerImages started on port %d", cfg.Port)
-	log.Printf("Upload endpoint: %s/upload", cfg.ServerURL)
-	log.Printf("CDN endpoint: %s/cdn/{filename}", cfg.ServerURL)
-	log.Printf("List endpoint: %s/images", cfg.ServerURL)
-	log.Printf("Upload directory: %s", cfg.UploadDir)
-	log.Printf("Max upload size: %d bytes (%d MB)", cfg.MaxUploadSize, cfg.MaxUploadSize/(1024*1024))
+	log.Printf("ServerImages started on port %s", config.Port)
+	log.Printf("Upload endpoint: %s/upload", config.ServerURL)
+	log.Printf("CDN endpoint: %s/cdn/{filename}", config.ServerURL)
+	log.Printf("List endpoint: %s/images", config.ServerURL)
+	log.Printf("Upload directory: %s", config.UploadDir)
+	log.Printf("Max upload size: %d bytes (%d MB)", config.MaxUploadSize, config.MaxUploadSize/(1024*1024))
 
-	log.Fatal(app.Listen(fmt.Sprintf(":%d", cfg.Port)))
+	log.Fatal(app.Listen(fmt.Sprintf(":%s", config.Port)))
 }
