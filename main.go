@@ -36,7 +36,7 @@ func main() {
 	app.Post("/upload", handlers.Upload())
 	app.Get("/cdn/:filename", handlers.ServeImage())
 	app.Get("/images", handlers.ListImages())
-	//app.Delete("/cdn/:filename", handlers.DeleteImage()) // not implemented?
+	app.Delete("/cdn/:filename", handlers.DeleteImage())
 
 	app.Static("/uploads", "./"+config.UploadDir)
 

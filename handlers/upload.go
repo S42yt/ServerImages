@@ -139,3 +139,33 @@ func Upload() fiber.Handler {
 		return c.JSON(response)
 	}
 }
+
+func DeleteImage() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		filename := c.Params("filename")
+
+		if strings.Contains(filename, "..") {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "Invalid file path",
+			})
+		}
+
+		filePath := filepath.Join(config.UploadDir, filename)
+
+		if _, err := os.Stat(filePath); os.IsNotExist(err) {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "Image not found",
+			})
+		}
+
+		if err := os.Remove(filePath); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Failed to delete image",
+			})
+		}
+
+		return c.JSON(fiber.Map{
+			"message": "Image deleted successfully",
+		})
+	}
+}
