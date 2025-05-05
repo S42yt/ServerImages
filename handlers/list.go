@@ -13,10 +13,9 @@ import (
 	"github.com/S42yt/serverimages/models"
 )
 
-func ListImages(cfg *config.Config) fiber.Handler {
+func ListImages() fiber.Handler {
 	return func(c *fiber.Ctx) error {
-
-		files, err := os.ReadDir(cfg.UploadDir)
+		files, err := os.ReadDir(config.UploadDir)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error": "Failed to read upload directory",
@@ -24,28 +23,23 @@ func ListImages(cfg *config.Config) fiber.Handler {
 		}
 
 		var images []models.ImageResponse
-
 		for _, file := range files {
-
 			if file.IsDir() || strings.HasPrefix(file.Name(), ".") {
 				continue
 			}
 
-			filePath := filepath.Join(cfg.UploadDir, file.Name())
-
+			filePath := filepath.Join(config.UploadDir, file.Name())
 			info, err := os.Stat(filePath)
 			if err != nil {
-
 				continue
 			}
 
 			image := models.ImageResponse{
-				URL:        fmt.Sprintf("%s/cdn/%s", cfg.ServerURL, file.Name()),
+				URL:        fmt.Sprintf("%s/cdn/%s", config.ServerURL, file.Name()),
 				ID:         file.Name(),
 				Size:       int(info.Size()),
 				UploadedAt: info.ModTime(),
 			}
-
 			images = append(images, image)
 		}
 
