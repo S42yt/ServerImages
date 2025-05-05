@@ -143,7 +143,6 @@ func Upload() fiber.Handler {
 func DeleteImage() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		filename := c.Params("filename")
-
 		if strings.Contains(filename, "..") {
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
 				"error": "Invalid file path",
@@ -151,7 +150,6 @@ func DeleteImage() fiber.Handler {
 		}
 
 		filePath := filepath.Join(config.UploadDir, filename)
-
 		if _, err := os.Stat(filePath); os.IsNotExist(err) {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 				"error": "Image not found",
