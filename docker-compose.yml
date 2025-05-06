@@ -9,7 +9,7 @@ services:
     ports:
       - "4200:4200"
     volumes:
-      - ./uploads:/app/uploads
+      - ./uploads:/app/uploads:rw
     env_file:
       - .env
     restart: unless-stopped

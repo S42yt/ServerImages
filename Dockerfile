@@ -36,7 +36,8 @@ VOLUME ["/app/uploads"]
 
 COPY <<EOF /app/entrypoint.sh
 #!/bin/sh
-chmod 777 /app/uploads
+mkdir -p /app/uploads
+chmod -R 777 /app/uploads
 chown -R appuser:appgroup /app/uploads
 
 exec su-exec appuser /app/serverimages
