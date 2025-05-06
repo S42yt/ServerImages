@@ -10,8 +10,6 @@ services:
       - "4200:4200"
     volumes:
       - ./uploads:/app/uploads
-    environment:
-      - SERVER_PORT=4200
-      - UPLOAD_DIR=/app/uploads
-      - SERVER_URL=http://0.0.0.0:4200
+    env_file:
+      - .env
     restart: unless-stopped
