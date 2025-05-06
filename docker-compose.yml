@@ -15,4 +15,3 @@ services:
       - UPLOAD_DIR=/app/uploads
       - SERVER_URL=http://0.0.0.0:4200
     restart: unless-stopped
-    network_mode: "host"
