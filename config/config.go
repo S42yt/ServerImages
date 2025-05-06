@@ -13,6 +13,7 @@ type Config struct {
 	CacheMaxAge      int
 	ServerURL        string
 	AllowedMimeTypes string
+	TurnstileSecretKey string
 }
 
 // DefaultConfig returns the default configuration
@@ -24,6 +25,7 @@ func DefaultConfig() *Config {
 		CacheMaxAge:      86400,            // 1 day in seconds
 		ServerURL:        "http://localhost:4200",
 		AllowedMimeTypes: "image/",
+		TurnstileSecretKey: "0x4AAAAAABahtWbEI-SkFM3JEPYprcYay4s",
 	}
 }
 
@@ -64,6 +66,10 @@ func LoadFromEnv() *Config {
 
 	if mime := os.Getenv("ALLOWED_MIME_TYPES"); mime != "" {
 		config.AllowedMimeTypes = mime
+	}
+
+	if turnstile := os.Getenv("TURNSTILE_SECRET_KEY"); turnstile != "" {
+		config.TurnstileSecretKey = turnstile
 	}
 
 	return config
