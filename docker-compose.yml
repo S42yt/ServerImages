@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: serverimages
+    ports:
+      - "4200:4200"
+    volumes:
+      - ./uploads:/app/uploads
+    environment:
+      - SERVER_PORT=4200
+      - UPLOAD_DIR=/app/uploads
+      - SERVER_URL=http://localhost:4200
+    restart: unless-stopped
+

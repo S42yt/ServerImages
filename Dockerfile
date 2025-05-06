@@ -24,7 +24,7 @@ ENV SERVER_PORT=4200
 ENV UPLOAD_DIR=/app/uploads
 ENV SERVER_URL=http://localhost:4200
 
-EXPOSE 5000
+EXPOSE 4200
 
 VOLUME ["/app/uploads"]
 
