@@ -14,37 +14,37 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
 
 FROM alpine:3.19
 
-RUN apk --no-cache add ca-certificates tzdata wget
+RUN apk --no-cache add ca-certificates tzdata wget shadow su-exec
 
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+RUN addgroup -g 1000 appgroup && adduser -u 1000 -G appgroup -h /app -D appuser
 
 WORKDIR /app
 
 COPY --from=builder /app/serverimages .
-
-RUN mkdir -p /app/uploads && \
-    chmod 777 /app/uploads && \
-    chown -R appuser:appgroup /app/uploads
-
 COPY .env /app/.env
 
-USER root
 
 EXPOSE 4200
 
-VOLUME ["/app/uploads"]
-
 COPY <<EOF /app/entrypoint.sh
 #!/bin/sh
-mkdir -p /app/uploads
-chmod -R 777 /app/uploads
-chown -R appuser:appgroup /app/uploads
+set -e
 
-exec su-exec appuser /app/serverimages
+# Ensure uploads directory exists with proper permissions
+mkdir -p /app/uploads
+chown -R appuser:appgroup /app
+chown -R appuser:appgroup /app/uploads
+chmod -R 777 /app/uploads
+
+# Print directory permissions for debugging
+echo "Directory permissions:"
+ls -la /app/uploads
+
+# Run the application as appuser
+exec su-exec appuser:appgroup /app/serverimages
 EOF
 
-RUN chmod +x /app/entrypoint.sh && \
-    apk add --no-cache su-exec
+RUN chmod +x /app/entrypoint.sh
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD wget -q --spider http://localhost:4200/images || exit 1
