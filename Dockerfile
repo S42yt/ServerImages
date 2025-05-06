@@ -1,35 +1,52 @@
+# Build stage
 FROM golang:1.21-alpine AS builder
+
+RUN apk add --no-cache git
 
 WORKDIR /app
 
 COPY go.mod go.sum ./
-
 RUN go mod download
 
 COPY . .
 
-RUN CGO_ENABLED=0 GOOS=linux go build -o serverimages .
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -ldflags="-s -w" -o serverimages .
 
-FROM alpine:latest
+FROM alpine:3.19
+
+RUN apk --no-cache add ca-certificates tzdata
+
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
 WORKDIR /app
 
-RUN apk --no-cache add ca-certificates
-
 COPY --from=builder /app/serverimages .
-COPY --from=builder /app/.env.template /app/.env
 
-RUN mkdir -p /app/uploads
+RUN mkdir -p /app/uploads && \
+    chown -R appuser:appgroup /app/uploads
 
-ENV PORT=4200
-ENV UPLOAD_DIR=/app/uploads
-ENV SERVER_URL=http://0.0.0.0:4200
-ENV MAX_UPLOAD_SIZE=524288000
-ENV CACHE_MAX_AGE=86400
-ENV ALLOWED_MIME_TYPES=image/
+COPY .env /app/.env
+
+ENV SERVER_PORT=4200 \
+    UPLOAD_DIR=/app/uploads \
+    SERVER_URL=http://localhost:4200 \
+    MAX_UPLOAD_SIZE=524288000 \
+    CACHE_MAX_AGE=86400 \
+    ALLOWED_MIME_TYPES=image/
+
+RUN if [ -f /app/.env ]; then \
+      export $(cat /app/.env | sed 's/#.*//g' | xargs); \
+    fi
+
+USER appuser
 
 EXPOSE 4200
 
 VOLUME ["/app/uploads"]
 
-CMD ["./serverimages"]
+# Set health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD wget -q --spider http://localhost:4200/images || exit 1
+
+ENTRYPOINT ["./serverimages"]
