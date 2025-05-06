@@ -13,6 +13,6 @@ services:
     environment:
       - SERVER_PORT=4200
       - UPLOAD_DIR=/app/uploads
-      - SERVER_URL=http://localhost:4200
+      - SERVER_URL=http://0.0.0.0:4200
     restart: unless-stopped
-
+    network_mode: "host"

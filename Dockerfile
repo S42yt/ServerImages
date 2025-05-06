@@ -1,4 +1,4 @@
-FROM golang:1.24.1-alpine AS builder
+FROM golang:1.21-alpine AS builder
 
 WORKDIR /app
 
@@ -17,12 +17,16 @@ WORKDIR /app
 RUN apk --no-cache add ca-certificates
 
 COPY --from=builder /app/serverimages .
+COPY --from=builder /app/.env.template /app/.env
 
 RUN mkdir -p /app/uploads
 
-ENV SERVER_PORT=4200
+ENV PORT=4200
 ENV UPLOAD_DIR=/app/uploads
-ENV SERVER_URL=http://localhost:4200
+ENV SERVER_URL=http://0.0.0.0:4200
+ENV MAX_UPLOAD_SIZE=524288000
+ENV CACHE_MAX_AGE=86400
+ENV ALLOWED_MIME_TYPES=image/
 
 EXPOSE 4200
 
