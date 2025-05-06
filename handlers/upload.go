@@ -41,9 +41,10 @@ type turnstileResponse struct {
 
 func verifyTurnstile(secretKey, token, remoteIP string) (bool, error) {
 	if secretKey == "" {
-		log.Println("Turnstile secret key is not configured.")
-		return false, errors.New("turnstile secret key is missing")
+		// Turnstile is not configured, skip verification
+		return true, nil
 	}
+
 	if token == "" {
 		return false, errors.New("turnstile token is missing")
 	}
@@ -89,37 +90,39 @@ func verifyTurnstile(secretKey, token, remoteIP string) (bool, error) {
 	return true, nil
 }
 
-func Upload(cfg *config.Config) fiber.Handler {
+func Upload() fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		turnstileToken := ""
-		contentType := string(c.Request().Header.ContentType())
+		// Optional Turnstile verification
+		if config.TurnstileSecretKey != "" {
+			turnstileToken := ""
+			contentType := string(c.Request().Header.ContentType())
 
-		if strings.Contains(contentType, "multipart/form-data") {
-			turnstileToken = c.FormValue("cf-turnstile-response")
-		} else if strings.Contains(contentType, "application/json") {
-
-			turnstileToken = c.FormValue("cf-turnstile-response")
-			if turnstileToken == "" {
-				log.Println("Turnstile token not found in FormValue for JSON request.")
+			if strings.Contains(contentType, "multipart/form-data") {
+				turnstileToken = c.FormValue("cf-turnstile-response")
+			} else if strings.Contains(contentType, "application/json") {
+				turnstileToken = c.FormValue("cf-turnstile-response")
+				if turnstileToken == "" {
+					log.Println("Turnstile token not found in FormValue for JSON request.")
+				}
 			}
-		}
 
-		clientIP := c.IP()
+			clientIP := c.IP()
 
-		verified, err := verifyTurnstile(cfg.TurnstileSecretKey, turnstileToken, clientIP)
-		if err != nil {
-			log.Printf("Turnstile verification error for IP %s: %v\n", clientIP, err)
-			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-				"error": "CAPTCHA verification failed",
-			})
+			verified, err := verifyTurnstile(config.TurnstileSecretKey, turnstileToken, clientIP)
+			if err != nil {
+				log.Printf("Turnstile verification error for IP %s: %v\n", clientIP, err)
+				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+					"error": "CAPTCHA verification failed",
+				})
+			}
+			if !verified {
+				log.Printf("Turnstile verification failed for IP %s. Token: %s\n", clientIP, turnstileToken)
+				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+					"error": "Invalid CAPTCHA token",
+				})
+			}
+			log.Printf("Turnstile verification successful for IP %s\n", clientIP)
 		}
-		if !verified {
-			log.Printf("Turnstile verification failed for IP %s. Token: %s\n", clientIP, turnstileToken)
-			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-				"error": "Invalid CAPTCHA token",
-			})
-		}
-		log.Printf("Turnstile verification successful for IP %s\n", clientIP)
 
 		var (
 			fileData   []byte
@@ -127,6 +130,7 @@ func Upload(cfg *config.Config) fiber.Handler {
 			uploadedAt = time.Now()
 		)
 
+		contentType := string(c.Request().Header.ContentType())
 		if strings.Contains(contentType, "multipart/form-data") {
 			file, err := c.FormFile("file")
 			if err != nil {
@@ -135,9 +139,9 @@ func Upload(cfg *config.Config) fiber.Handler {
 				})
 			}
 
-			if file.Size > cfg.MaxUploadSize {
+			if file.Size > config.MaxUploadSize {
 				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-					"error": fmt.Sprintf("File too large (max %dMB)", cfg.MaxUploadSize/(1024*1024)),
+					"error": fmt.Sprintf("File too large (max %dMB)", config.MaxUploadSize/(1024*1024)),
 				})
 			}
 
@@ -159,8 +163,6 @@ func Upload(cfg *config.Config) fiber.Handler {
 
 		} else if strings.Contains(contentType, "application/json") {
 			var body models.Base64Upload
-			// Need to read body again if token wasn't in FormValue/Header/Query
-			// This might fail if body was already read for token extraction
 			if err := c.BodyParser(&body); err != nil {
 				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 					"error": "Invalid request body",
@@ -180,6 +182,7 @@ func Upload(cfg *config.Config) fiber.Handler {
 				base64Data = base64Data[idx+8:]
 			}
 
+			var err error
 			fileData, err = base64.StdEncoding.DecodeString(base64Data)
 			if err != nil {
 				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -187,9 +190,9 @@ func Upload(cfg *config.Config) fiber.Handler {
 				})
 			}
 
-			if int64(len(fileData)) > cfg.MaxUploadSize {
+			if int64(len(fileData)) > config.MaxUploadSize {
 				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-					"error": fmt.Sprintf("File too large (max %dMB)", cfg.MaxUploadSize/(1024*1024)),
+					"error": fmt.Sprintf("File too large (max %dMB)", config.MaxUploadSize/(1024*1024)),
 				})
 			}
 
@@ -212,7 +215,7 @@ func Upload(cfg *config.Config) fiber.Handler {
 			})
 		}
 
-		if !strings.HasPrefix(mimeType, cfg.AllowedMimeTypes) {
+		if !strings.HasPrefix(mimeType, config.AllowedMimeTypes) {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": "Only image files are allowed",
 			})
@@ -226,7 +229,7 @@ func Upload(cfg *config.Config) fiber.Handler {
 		}
 
 		filename := fmt.Sprintf("%s%s", uuid.New().String(), fileExt)
-		filePath := filepath.Join(cfg.UploadDir, filename)
+		filePath := filepath.Join(config.UploadDir, filename)
 
 		err = os.WriteFile(filePath, fileData, 0644)
 		if err != nil {
@@ -237,7 +240,7 @@ func Upload(cfg *config.Config) fiber.Handler {
 		}
 
 		response := models.ImageResponse{
-			URL:        fmt.Sprintf("%s/cdn/%s", cfg.ServerURL, filename),
+			URL:        fmt.Sprintf("%s/cdn/%s", config.ServerURL, filename),
 			ID:         filename,
 			Size:       len(fileData),
 			UploadedAt: uploadedAt,
@@ -247,18 +250,16 @@ func Upload(cfg *config.Config) fiber.Handler {
 	}
 }
 
-func DeleteImage(cfg *config.Config) fiber.Handler {
+func DeleteImage() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		filename := c.Params("filename")
-
 		if strings.Contains(filename, "..") {
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
 				"error": "Invalid file path",
 			})
 		}
 
-		filePath := filepath.Join(cfg.UploadDir, filename)
-
+		filePath := filepath.Join(config.UploadDir, filename)
 		if _, err := os.Stat(filePath); os.IsNotExist(err) {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 				"error": "Image not found",
@@ -277,4 +278,3 @@ func DeleteImage(cfg *config.Config) fiber.Handler {
 		})
 	}
 }
-
