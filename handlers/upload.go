@@ -1,9 +1,14 @@
 package handlers
 
 import (
+	"bytes"
 	"encoding/base64"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,18 +22,116 @@ import (
 	"github.com/S42yt/serverimages/utils"
 )
 
+const turnstileVerifyURL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
+
+type turnstileRequest struct {
+	Secret   string `json:"secret"`
+	Response string `json:"response"`
+	RemoteIP string `json:"remoteip,omitempty"`
+}
+
+type turnstileResponse struct {
+	Success     bool      `json:"success"`
+	ChallengeTS time.Time `json:"challenge_ts"`
+	Hostname    string    `json:"hostname"`
+	ErrorCodes  []string  `json:"error-codes"`
+	Action      string    `json:"action"`
+	CData       string    `json:"cdata"`
+}
+
+func verifyTurnstile(secretKey, token, remoteIP string) (bool, error) {
+	if secretKey == "" {
+		// Turnstile is not configured, skip verification
+		return true, nil
+	}
+
+	if token == "" {
+		return false, errors.New("turnstile token is missing")
+	}
+
+	reqBody := turnstileRequest{
+		Secret:   secretKey,
+		Response: token,
+		RemoteIP: remoteIP,
+	}
+
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		log.Printf("Error marshalling turnstile request: %v\n", err)
+		return false, fmt.Errorf("failed to marshal turnstile request: %w", err)
+	}
+
+	resp, err := http.Post(turnstileVerifyURL, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		log.Printf("Error sending request to turnstile verify endpoint: %v\n", err)
+		return false, fmt.Errorf("failed to send request to turnstile verify endpoint: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("Turnstile verification failed with status code: %d\n", resp.StatusCode)
+		return false, fmt.Errorf("turnstile verification request failed with status: %s", resp.Status)
+	}
+
+	var verifyResp turnstileResponse
+	if err := json.NewDecoder(resp.Body).Decode(&verifyResp); err != nil {
+		log.Printf("Error decoding turnstile response: %v\n", err)
+		return false, fmt.Errorf("failed to decode turnstile response: %w", err)
+	}
+
+	if !verifyResp.Success {
+		log.Printf("Turnstile verification unsuccessful. Error codes: %v\n", verifyResp.ErrorCodes)
+		if len(verifyResp.ErrorCodes) > 0 {
+			return false, fmt.Errorf("turnstile verification failed: %s", strings.Join(verifyResp.ErrorCodes, ", "))
+		}
+		return false, errors.New("turnstile verification failed")
+	}
+
+	return true, nil
+}
+
 func Upload() fiber.Handler {
 	return func(c *fiber.Ctx) error {
+		// Optional Turnstile verification
+		if config.TurnstileSecretKey != "" {
+			turnstileToken := ""
+			contentType := string(c.Request().Header.ContentType())
+
+			if strings.Contains(contentType, "multipart/form-data") {
+				turnstileToken = c.FormValue("cf-turnstile-response")
+			} else if strings.Contains(contentType, "application/json") {
+				turnstileToken = c.FormValue("cf-turnstile-response")
+				if turnstileToken == "" {
+					log.Println("Turnstile token not found in FormValue for JSON request.")
+				}
+			}
+
+			clientIP := c.IP()
+
+			verified, err := verifyTurnstile(config.TurnstileSecretKey, turnstileToken, clientIP)
+			if err != nil {
+				log.Printf("Turnstile verification error for IP %s: %v\n", clientIP, err)
+				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+					"error": "CAPTCHA verification failed",
+				})
+			}
+			if !verified {
+				log.Printf("Turnstile verification failed for IP %s. Token: %s\n", clientIP, turnstileToken)
+				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+					"error": "Invalid CAPTCHA token",
+				})
+			}
+			log.Printf("Turnstile verification successful for IP %s\n", clientIP)
+		}
+
 		var (
 			fileData   []byte
 			fileExt    string
 			uploadedAt = time.Now()
-			err        error
 		)
 
-		contentType := c.Get("Content-Type")
-		switch contentType {
-		case "multipart/form-data":
+		contentType := string(c.Request().Header.ContentType())
+		if strings.Contains(contentType, "multipart/form-data") {
 			file, err := c.FormFile("file")
 			if err != nil {
 				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -56,10 +159,9 @@ func Upload() fiber.Handler {
 					"error": "Failed to read file data",
 				})
 			}
-
 			fileExt = filepath.Ext(file.Filename)
 
-		case "application/json":
+		} else if strings.Contains(contentType, "application/json") {
 			var body models.Base64Upload
 			if err := c.BodyParser(&body); err != nil {
 				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -80,6 +182,7 @@ func Upload() fiber.Handler {
 				base64Data = base64Data[idx+8:]
 			}
 
+			var err error
 			fileData, err = base64.StdEncoding.DecodeString(base64Data)
 			if err != nil {
 				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -93,9 +196,15 @@ func Upload() fiber.Handler {
 				})
 			}
 
-		default:
+		} else {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": "Unsupported content type",
+			})
+		}
+
+		if len(fileData) == 0 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "No file data received",
 			})
 		}
 
@@ -124,6 +233,7 @@ func Upload() fiber.Handler {
 
 		err = os.WriteFile(filePath, fileData, 0644)
 		if err != nil {
+			log.Printf("Failed to save file %s: %v\n", filePath, err)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error": "Failed to save file",
 			})
@@ -157,6 +267,7 @@ func DeleteImage() fiber.Handler {
 		}
 
 		if err := os.Remove(filePath); err != nil {
+			log.Printf("Failed to delete image %s: %v\n", filePath, err)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error": "Failed to delete image",
 			})

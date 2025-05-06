@@ -27,6 +27,7 @@ go.work
 /bin/
 /dist/
 
+
 # Environment variables
 .env
 .env.local
@@ -36,3 +37,6 @@ frontend
 
 #imagesdir
 uploads/*
+
+# MacOS
+.DS_Store
