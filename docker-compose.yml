@@ -13,7 +13,6 @@ services:
     env_file:
       - .env
     restart: unless-stopped
-    user: "1000:1000"
     networks:
       - server-network
 
