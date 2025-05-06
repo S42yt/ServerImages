@@ -21,11 +21,9 @@ var (
 func LoadConfig() error {
 	err := godotenv.Load()
 	if err != nil {
-		// It's okay if .env doesn't exist, we'll use defaults
 		fmt.Printf("Notice: .env file not found, using environment variables\n")
 	}
 
-	// Set defaults
 	if Port == "" {
 		Port = "4200"
 	}
@@ -45,7 +43,6 @@ func LoadConfig() error {
 		AllowedMimeTypes = "image/"
 	}
 
-	// Override with environment variables if they exist
 	if port := os.Getenv("PORT"); port != "" {
 		Port = port
 		if ServerURL == "http://localhost:4200" {
@@ -73,7 +70,6 @@ func LoadConfig() error {
 		AllowedMimeTypes = mime
 	}
 
-	// Optional Turnstile configuration
 	TurnstileSecretKey = os.Getenv("TURNSTILE_SECRET_KEY")
 
 	return nil
