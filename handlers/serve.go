@@ -13,16 +13,14 @@ import (
 	"github.com/S42yt/serverimages/utils"
 )
 
-func ServeImage(cfg *config.Config) fiber.Handler {
+func ServeImage() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		filename := c.Params("filename")
-
 		if strings.Contains(filename, "..") {
 			return c.Status(fiber.StatusForbidden).SendString("Invalid file path")
 		}
 
-		filePath := filepath.Join(cfg.UploadDir, filename)
-
+		filePath := filepath.Join(config.UploadDir, filename)
 		info, err := os.Stat(filePath)
 		if os.IsNotExist(err) {
 			return c.Status(fiber.StatusNotFound).SendString("Image not found")
@@ -31,7 +29,7 @@ func ServeImage(cfg *config.Config) fiber.Handler {
 		etag := fmt.Sprintf(`"%x-%x"`, info.ModTime().Unix(), info.Size())
 		lastModified := info.ModTime().UTC().Format(http.TimeFormat)
 
-		c.Set("Cache-Control", fmt.Sprintf("public, max-age=%d", cfg.CacheMaxAge))
+		c.Set("Cache-Control", fmt.Sprintf("public, max-age=%d", config.CacheMaxAge))
 		c.Set("Last-Modified", lastModified)
 		c.Set("ETag", etag)
 
@@ -45,7 +43,6 @@ func ServeImage(cfg *config.Config) fiber.Handler {
 		}
 
 		c.Set("Content-Type", mimeType)
-
 		return c.SendFile(filePath)
 	}
 }

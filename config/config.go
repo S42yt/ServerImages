@@ -4,67 +4,38 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+
+	"github.com/joho/godotenv"
 )
 
-type Config struct {
-	Port             int
+var (
+	Port             string
 	UploadDir        string
 	MaxUploadSize    int64
 	CacheMaxAge      int
 	ServerURL        string
 	AllowedMimeTypes string
-}
+)
 
-// DefaultConfig returns the default configuration
-func DefaultConfig() *Config {
-	return &Config{
-		Port:             4200,
-		UploadDir:        "uploads",
-		MaxUploadSize:    500 * 1024 * 1024, // 500MB
-		CacheMaxAge:      86400,            // 1 day in seconds
-		ServerURL:        "http://localhost:4200",
-		AllowedMimeTypes: "image/",
-	}
-}
-
-func LoadFromEnv() *Config {
-	config := DefaultConfig()
-
-	if port := os.Getenv("PORT"); port != "" {
-		if p, err := strconv.Atoi(port); err == nil && p > 0 {
-			config.Port = p
-			config.ServerURL = fmt.Sprintf("http://localhost:%d", p)
-		}
-	} else if port := os.Getenv("SERVER_PORT"); port != "" {
-		if p, err := strconv.Atoi(port); err == nil && p > 0 {
-			config.Port = p
-			config.ServerURL = fmt.Sprintf("http://localhost:%d", p)
-		}
+func LoadConfig() error {
+	err := godotenv.Load()
+	if err != nil {
+		return fmt.Errorf("error loading .env file: %w", err)
 	}
 
-	if dir := os.Getenv("UPLOAD_DIR"); dir != "" {
-		config.UploadDir = dir
-	}
+	Port = os.Getenv("PORT")
+	UploadDir = os.Getenv("UPLOAD_DIR")
 
-	if size := os.Getenv("MAX_UPLOAD_SIZE"); size != "" {
-		if s, err := strconv.ParseInt(size, 10, 64); err == nil && s > 0 {
-			config.MaxUploadSize = s
-		}
+	if sizeStr := os.Getenv("MAX_UPLOAD_SIZE"); sizeStr != "" {
+		MaxUploadSize, _ = strconv.ParseInt(sizeStr, 10, 64)
 	}
 
 	if age := os.Getenv("CACHE_MAX_AGE"); age != "" {
-		if a, err := strconv.Atoi(age); err == nil && a > 0 {
-			config.CacheMaxAge = a
-		}
+		CacheMaxAge, _ = strconv.Atoi(age)
 	}
 
-	if url := os.Getenv("SERVER_URL"); url != "" {
-		config.ServerURL = url
-	}
+	ServerURL = os.Getenv("SERVER_URL")
+	AllowedMimeTypes = os.Getenv("ALLOWED_MIME_TYPES")
 
-	if mime := os.Getenv("ALLOWED_MIME_TYPES"); mime != "" {
-		config.AllowedMimeTypes = mime
-	}
-
-	return config
+	return nil
 }

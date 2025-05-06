@@ -17,7 +17,7 @@ import (
 	"github.com/S42yt/serverimages/utils"
 )
 
-func Upload(cfg *config.Config) fiber.Handler {
+func Upload() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var (
 			fileData   []byte
@@ -27,9 +27,8 @@ func Upload(cfg *config.Config) fiber.Handler {
 		)
 
 		contentType := c.Get("Content-Type")
-
-		if strings.Contains(contentType, "multipart/form-data") {
-
+		switch contentType {
+		case "multipart/form-data":
 			file, err := c.FormFile("file")
 			if err != nil {
 				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -37,9 +36,9 @@ func Upload(cfg *config.Config) fiber.Handler {
 				})
 			}
 
-			if file.Size > cfg.MaxUploadSize {
+			if file.Size > config.MaxUploadSize {
 				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-					"error": fmt.Sprintf("File too large (max %dMB)", cfg.MaxUploadSize/(1024*1024)),
+					"error": fmt.Sprintf("File too large (max %dMB)", config.MaxUploadSize/(1024*1024)),
 				})
 			}
 
@@ -60,8 +59,7 @@ func Upload(cfg *config.Config) fiber.Handler {
 
 			fileExt = filepath.Ext(file.Filename)
 
-		} else if strings.Contains(contentType, "application/json") {
-
+		case "application/json":
 			var body models.Base64Upload
 			if err := c.BodyParser(&body); err != nil {
 				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -76,7 +74,6 @@ func Upload(cfg *config.Config) fiber.Handler {
 			}
 
 			base64Data := body.Base64
-
 			if idx := strings.Index(base64Data, ";base64,"); idx > 0 {
 				mimeType := base64Data[5:idx]
 				fileExt = utils.MimeToExtension(mimeType)
@@ -90,13 +87,13 @@ func Upload(cfg *config.Config) fiber.Handler {
 				})
 			}
 
-			if int64(len(fileData)) > cfg.MaxUploadSize {
+			if int64(len(fileData)) > config.MaxUploadSize {
 				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-					"error": fmt.Sprintf("File too large (max %dMB)", cfg.MaxUploadSize/(1024*1024)),
+					"error": fmt.Sprintf("File too large (max %dMB)", config.MaxUploadSize/(1024*1024)),
 				})
 			}
 
-		} else {
+		default:
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": "Unsupported content type",
 			})
@@ -109,7 +106,7 @@ func Upload(cfg *config.Config) fiber.Handler {
 			})
 		}
 
-		if !strings.HasPrefix(mimeType, cfg.AllowedMimeTypes) {
+		if !strings.HasPrefix(mimeType, config.AllowedMimeTypes) {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": "Only image files are allowed",
 			})
@@ -118,13 +115,12 @@ func Upload(cfg *config.Config) fiber.Handler {
 		if fileExt == "" {
 			fileExt = utils.MimeToExtension(mimeType)
 			if fileExt == "" {
-
 				fileExt = ".bin"
 			}
 		}
 
 		filename := fmt.Sprintf("%s%s", uuid.New().String(), fileExt)
-		filePath := filepath.Join(cfg.UploadDir, filename)
+		filePath := filepath.Join(config.UploadDir, filename)
 
 		err = os.WriteFile(filePath, fileData, 0644)
 		if err != nil {
@@ -134,7 +130,7 @@ func Upload(cfg *config.Config) fiber.Handler {
 		}
 
 		response := models.ImageResponse{
-			URL:        fmt.Sprintf("%s/cdn/%s", cfg.ServerURL, filename),
+			URL:        fmt.Sprintf("%s/cdn/%s", config.ServerURL, filename),
 			ID:         filename,
 			Size:       len(fileData),
 			UploadedAt: uploadedAt,
@@ -144,18 +140,16 @@ func Upload(cfg *config.Config) fiber.Handler {
 	}
 }
 
-func DeleteImage(cfg *config.Config) fiber.Handler {
+func DeleteImage() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		filename := c.Params("filename")
-
 		if strings.Contains(filename, "..") {
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
 				"error": "Invalid file path",
 			})
 		}
 
-		filePath := filepath.Join(cfg.UploadDir, filename)
-
+		filePath := filepath.Join(config.UploadDir, filename)
 		if _, err := os.Stat(filePath); os.IsNotExist(err) {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 				"error": "Image not found",
