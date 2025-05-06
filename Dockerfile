@@ -28,24 +28,12 @@ RUN mkdir -p /app/uploads && \
 
 COPY .env /app/.env
 
-ENV SERVER_PORT=4200 \
-    UPLOAD_DIR=/app/uploads \
-    SERVER_URL=http://localhost:4200 \
-    MAX_UPLOAD_SIZE=524288000 \
-    CACHE_MAX_AGE=86400 \
-    ALLOWED_MIME_TYPES=image/
-
-RUN if [ -f /app/.env ]; then \
-      export $(cat /app/.env | sed 's/#.*//g' | xargs); \
-    fi
-
 USER appuser
 
 EXPOSE 4200
 
 VOLUME ["/app/uploads"]
 
-# Set health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD wget -q --spider http://localhost:4200/images || exit 1
 

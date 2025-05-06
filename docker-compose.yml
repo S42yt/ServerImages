@@ -13,3 +13,9 @@ services:
     env_file:
       - .env
     restart: unless-stopped
+    networks:
+      - server-network
+
+networks:
+  server-network:
+    driver: bridge
