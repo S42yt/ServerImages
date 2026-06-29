@@ -16,6 +16,7 @@ var (
 	ServerURL          string
 	AllowedMimeTypes   string
 	TurnstileSecretKey string
+	InternalSecret     string
 )
 
 func LoadConfig() error {
@@ -71,6 +72,10 @@ func LoadConfig() error {
 	}
 
 	TurnstileSecretKey = os.Getenv("TURNSTILE_SECRET_KEY")
+
+	// Shared secret the trusted frontend proxy sends to skip Turnstile for
+	// sessions that already passed it once. Empty = no bypass allowed.
+	InternalSecret = os.Getenv("INTERNAL_API_SECRET")
 
 	return nil
 }

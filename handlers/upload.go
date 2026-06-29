@@ -92,8 +92,14 @@ func verifyTurnstile(secretKey, token, remoteIP string) (bool, error) {
 
 func Upload() fiber.Handler {
 	return func(c *fiber.Ctx) error {
+		// A session that already passed Turnstile once is marked verified by the
+		// trusted frontend proxy, which then sends the shared internal secret so
+		// the same session can keep uploading without solving a new challenge.
+		bypassTurnstile := config.InternalSecret != "" &&
+			c.Get("X-Internal-Secret") == config.InternalSecret
+
 		// Optional Turnstile verification
-		if config.TurnstileSecretKey != "" {
+		if config.TurnstileSecretKey != "" && !bypassTurnstile {
 			turnstileToken := ""
 			contentType := string(c.Request().Header.ContentType())
 
