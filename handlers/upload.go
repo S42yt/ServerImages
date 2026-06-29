@@ -246,6 +246,9 @@ func Upload() fiber.Handler {
 			UploadedAt: uploadedAt,
 		}
 
+		// Stream the new image to all connected clients in real time.
+		hub.broadcast("image", response)
+
 		return c.JSON(response)
 	}
 }
@@ -272,6 +275,9 @@ func DeleteImage() fiber.Handler {
 				"error": "Failed to delete image",
 			})
 		}
+
+		// Stream the removal to all connected clients in real time.
+		hub.broadcast("delete", fiber.Map{"id": filename})
 
 		return c.JSON(fiber.Map{
 			"message": "Image deleted successfully",

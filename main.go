@@ -39,6 +39,7 @@ func main() {
 	app.Get("/cdn/:filename", handlers.ServeImage())
 	app.Get("/images", handlers.ListImages())
 	app.Delete("/cdn/:filename", handlers.DeleteImage())
+	app.Get("/events", handlers.Events())
 
 	app.Static("/uploads", "./"+config.UploadDir)
 
@@ -46,6 +47,7 @@ func main() {
 	log.Printf("Upload endpoint: %s/upload", config.ServerURL)
 	log.Printf("CDN endpoint: %s/cdn/{filename}", config.ServerURL)
 	log.Printf("List endpoint: %s/images", config.ServerURL)
+	log.Printf("Events (SSE) endpoint: %s/events", config.ServerURL)
 	log.Printf("Upload directory: %s", config.UploadDir)
 	log.Printf("Max upload size: %d bytes (%d MB)", config.MaxUploadSize, config.MaxUploadSize/(1024*1024))
 
